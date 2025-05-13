@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+
+ <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Saturn Exploration</title>
+    <script src="https://cdn.jsdelivr.net/npm/p5@1.8.0/lib/p5.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #000;
+            overflow: hidden;
+           : flex;
+            justify-content: center;
+            align-items: center;
+           : 100vh;
+           : white;
+            font-family: Arial, sans-serif;
+        }
+        #canvas-container {
+            width: 100%;
+            max-width: 1200px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: center;
+            position: relative;
+        }
+        #instructions {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            text-align: center;
+            opacity: 0.7;
+            font-size: 14px;
+            pointer-events: none;
+            transition: opacity 2s;
+        }
+    </style>
+
+<base target="_self">
+
+
+    <div id="canvas-container"></div>
+    <div id="instructions">Drag to rotate · Scroll to zoom</div>
+
+    <script>
+        const sketch = (p) => {
+            let planetRadius;
+            let ringWidth;
+            let rotationX = 0;
+            let rotationY = 0;
+            let targetRotationX = 0;
+            let targetRotationY = 0;
+            let zoom = 1;
+            let targetZoom = 1;
+            let isDragging = false;
+            let prevMouseX, prevMouseY;
+            let stars = [];
+            let moons = [];
+            let ringParticles = [];
+            let godRays = [];
+            let bgStars = [];
+            let canvasWidth, canvasHeight;
+            let centerX, centerY;
+            let starCount = 1000;
+            let bgStarCount = 500;
+            let ringParticleCount = 800;
+            let godRayCount = 12;
+            let moonCount = 5;
+            let lastFrameTime = 0;
+            let frameRateMonitor = 0;
+            let quality = 1;
+            let isMobile = false;
+
+            p.setup = () => {
+                checkMobile();
+                calculateCanvasSize();
+                let canvas = p.createCanvas(canvasWidth, canvasHeight, p.WEBGL);
+                canvas.parent('canvas-container');
+                canvas.elt.style.display = 'block';
+                
+                planetRadius = p.min(canvasWidth, canvasHeight) * 0.2;
+                ringWidth = planetRadius * 2.5;
+                
+                initStars();
+                initBackgroundStars();
+                initRingParticles();
+                initGodRays();
+                initMoons();
+                
+                p.noStroke();
+                p.smooth();
+                
+                setTimeout(() => {
+                    p.select('#instructions').style('opacity', '0');
+                }, 5000);
+            };
+
+            function checkMobile() {
+                isMobile = /Mobi|Android/i.test(navigator.userAgent);
+                if (isMobile) {
+                    starCount = 500;
+                    bgStarCount = 200;
+                    ringParticleCount = 400;
+                    godRayCount = 8;
+                    moonCount = 3;
+                }
+            }
+
+            function calculateCanvasSize() {
+                canvasWidth = p.min(p.windowWidth, 1200);
+                canvasHeight = p.min(p.windowHeight, canvasWidth * 0.8);
+                centerX = canvasWidth / 2;
+                centerY = canvasHeight / 2;
+            }
+
+            function initStars() {
+                for (let i = 0; i < starCount; i++) {
+                    stars.push({
+                        x: p.random(-canvasWidth * 2, canvasWidth * 2),
+                        y: p.random(-canvasHeight * 2, canvasHeight * 2),
+                        z: p.random(1000),
+                        size: p.random(0.5, 2),
+                        twinkle: p.random(0.1, 0.3)
+                    });
+                }
+            }
+
+            function initBackgroundStars() {
+                for (let i = 0; i < bgStarCount; i++) {
+                    bgStars.push({
+                        x: p.random(-canvasWidth * 10, canvasWidth * 10),
+                        y: p.random(-canvasHeight * 10, canvasHeight * 10),
+                        size: p.random(0.1, 0.5),
+                        alpha: p.random(50, 150)
+                    });
+                }
+            }
+
+            function initRingParticles() {
+                for (let i = 0; i < ringParticleCount; i++) {
+                    const angle = p.random(p.TWO_PI);
+                    const distance = p.random(planetRadius * 1.2, ringWidth);
+                    const z = p.random(-planetRadius * 0.2, planetRadius * 0.2);
+                    
+                    ringParticles.push({
+                        angle: angle,
+                        distance: distance,
+                        z: z,
+                        size: p.random(0.5, 3),
+                        speed: p.random(0.001, 0.003),
+                        brightness: p.random(100, 255),
+                        seed: p.random(1000)
+                    });
+                }
+            }
+
+            function initGodRays() {
+                for (let i = 0; i < godRayCount; i++) {
+                    godRays.push({
+                        angle: p.random(p.TWO_PI),
+                        width: p.random(5, 15),
+                        length: p.random(ringWidth * 0.5, ringWidth * 1.5),
+                        brightness: p.random(30, 70),
+                        speed: p.random(0.001, 0.003)
+                    });
+                }
+            }
+
+            function initMoons() {
+                for (let i = 0; i < moonCount; i++) {
+                    const distance = p.random(planetRadius * 1.8, planetRadius * 3);
+                    const angle = p.random(p.TWO_PI);
+                    const size = p.random(planetRadius * 0.1, planetRadius * 0.2);
+                    
+                    moons.push({
+                        distance: distance,
+                        angle: angle,
+                        size: size,
+                        speed: p.random(0.002, 0.005),
+                        craters: Math.floor(p.random(5, 15)),
+                        phase: p.random(p.TWO_PI)
+                    });
+                }
+            }
+
+            p.draw = () => {
+                frameRateMonitoring();
+                adjustQuality();
+                
+                p.background(0);
+                p.push();
+                
+                // Handle camera
+                p.translate(0, 0, -1000 * zoom);
+                p.rotateX(rotationX);
+                p.rotateY(rotationY);
+                
+                // Smooth transitions
+                rotationX = p.lerp(rotationX, targetRotationX, 0.05);
+                rotationY = p.lerp(rotationY, targetRotationY, 0.05);
+                zoom = p.lerp(zoom, targetZoom, 0.1);
+                
+                drawBackgroundStars();
+                drawGodRays();
+                drawPlanet();
+                drawRings();
+                drawMoons();
+                drawStars();
+                
+                p.pop();
+            };
+
+            function frameRateMonitoring() {
+                const now = p.millis();
+                if (lastFrameTime > 0) {
+                    frameRateMonitor = 0.9 * frameRateMonitor + 0.1 * (1000 / (now - lastFrameTime));
+                    if (frameRateMonitor < 30 && quality > 0.5) {
+                        quality = 0.5;
+                    } else if (frameRateMonitor > 50 && quality < 1) {
+                        quality = p.min(1, quality + 0.01);
+                    }
+                }
+                lastFrameTime = now;
+            }
+
+            function adjustQuality() {
+                if (quality < 1) {
+                    p.frameRate(30);
+                } else {
+                    p.frameRate(60);
+                }
+            }
+
+            function drawBackgroundStars() {
+                p.push();
+                p.translate(0, 0, -2000);
+                p.fill(255);
+                for (let star of bgStars) {
+                    const alpha = quality < 0.7 ? star.alpha * 0.7 : star.alpha;
+                    p.fill(255, alpha);
+                    p.circle(star.x, star.y, star.size);
+                }
+                p.pop();
+            }
+
+            function drawGodRays() {
+                p.push();
+                p.rotateX(p.PI / 2);
+                p.blendMode(p.ADD);
+                
+                for (let ray of godRays) {
+                    p.push();
+                    p.rotateZ(ray.angle + p.frameCount * ray.speed);
+                    p.fill(255, 255, 200, ray.brightness * 0.5 * quality);
+                    
+                    p.beginShape();
+                    p.vertex(0, 0);
+                    p.vertex(-ray.width, ray.length);
+                    p.vertex(ray.width, ray.length);
+                    p.endShape(p.CLOSE);
+                    
+                    p.pop();
+                }
+                
+                p.blendMode(p.BLEND);
+                p.pop();
+            }
+
+            function drawPlanet() {
+                p.push();
+                p.rotateX(p.PI / 2);
+                
+                // Main planet sphere
+                p.fill(210, 180, 140);
+                p.sphere(planetRadius * 0.95, 64 * quality, 64 * quality);
+                
+                // Atmospheric bands
+                p.rotateZ(p.frameCount * 0.001);
+                for (let i = 0; i < 10; i++) {
+                    const lat = p.map(i, 0, 9, -p.PI/2, p.PI/2);
+                    const width = p.map(p.abs(lat), 0, p.PI/2, 0.1, 0.05) * planetRadius;
+                    const brightness = 140 + p.sin(lat * 4) * 40;
+                    
+                    p.push();
+                    p.rotateY(lat);
+                    p.fill(210, brightness, 100, 200);
+                    p.torus(planetRadius * 0.98, width, 24 * quality, 8);
+                    p.pop();
+                }
+                
+                // Polar regions
+                p.push();
+                p.fill(150, 200, 255, 150);
+                p.translate(0, 0, planetRadius * 0.9);
+                p.sphere(planetRadius * 0.3, 32 * quality, 32 * quality);
+                p.translate(0, 0, -planetRadius * 1.8);
+                p.sphere(planetRadius * 0.3, 32 * quality, 32 * quality);
+                p.pop();
+                
+                p.pop();
+            }
+
+            function drawRings() {
+                p.push();
+                p.rotateX(p.PI / 2);
+                p.rotateZ(p.frameCount * 0.001);
+                
+                // Main ring disc
+                p.fill(200, 200, 180, 50);
+                p.torus((planetRadius + ringWidth) / 2, ringWidth / 2 - planetRadius, 64 * quality, 4 * quality);
+                
+                // Ring particles
+                p.blendMode(p.ADD);
+                for (let particle of ringParticles) {
+                    if (quality < 0.7 && p.random() > 0.7) continue;
+                    
+                    const x = p.cos(particle.angle) * particle.distance;
+                    const y = p.sin(particle.angle) * particle.distance;
+                    const noiseVal = p.noise(particle.seed + p.frameCount * 0.01);
+                    const brightness = particle.brightness * noiseVal;
+                    
+                    p.push();
+                    p.translate(x, y, particle.z);
+                    p.fill(255, 255, 200, brightness * quality);
+                    p.circle(0, 0, particle.size);
+                    p.pop();
+                    
+                    particle.angle += particle.speed;
+                }
+                p.blendMode(p.BLEND);
+                
+                // Inner shadow
+                p.fill(0, 0, 0, 100);
+                p.torus((planetRadius + ringWidth * 0.3) / 2, (ringWidth * 0.3 - planetRadius) / 2, 32 * quality, 4);
+                
+                p.pop();
+            }
+
+            function drawMoons() {
+                p.push();
+                p.rotateX(p.PI / 2);
+                
+                for (let moon of moons) {
+                    moon.angle += moon.speed;
+                    const x = p.cos(moon.angle) * moon.distance;
+                    const y = p.sin(moon.angle) * moon.distance;
+                    
+                    p.push();
+                    p.translate(x, y, 0);
+                    p.rotateY(moon.phase + p.frameCount * 0.005);
+                    
+                    // Moon sphere
+                    p.fill(180, 180, 170);
+                    p.sphere(moon.size * 0.95, 32 * quality, 32 * quality);
+                    
+                    // Craters
+                    p.fill(150, 150, 140);
+                    for (let i = 0; i < moon.craters; i++) {
+                        if (quality < 0.5 && i % 2 === 0) continue;
+                        
+                        const lat = p.random(-p.PI/2, p.PI/2);
+                        const lon = p.random(p.TWO_PI);
+                        const craterSize = p.random(moon.size * 0.1, moon.size * 0.3);
+                        
+                        p.push();
+                        p.rotateY(lat);
+                        p.rotateZ(lon);
+                        p.translate(0, moon.size * 0.95, 0);
+                        p.circle(0, 0, craterSize);
+                        p.pop();
+                    }
+                    
+                    p.pop();
+                }
+                
+                p.pop();
+            }
+
+            function drawStars() {
+                p.push();
+                p.translate(0, 0, -500);
+                p.fill(255);
+                
+                for (let star of stars) {
+                    if (quality < 0.7 && p.random() > 0.8) continue;
+                    
+                    const twinkleFactor = p.sin(p.frameCount * star.twinkle) * 0.5 + 0.5;
+                    const alpha = 255 * twinkleFactor * quality;
+                    
+                    p.push();
+                    p.translate(star.x, star.y, star.z);
+                    p.fill(255, alpha);
+                    p.circle(0, 0, star.size);
+                    p.pop();
+                }
+                
+                p.pop();
+            }
+
+            p.mousePressed = () => {
+                isDragging = true;
+                prevMouseX = p.mouseX;
+                prevMouseY = p.mouseY;
+                p.select('#instructions').style('opacity', '0.7');
+            };
+
+            p.mouseReleased = () => {
+                isDragging = false;
+                setTimeout(() => {
+                    p.select('#instructions').style('opacity', '0');
+                }, 2000);
+            };
+
+            p.mouseDragged = () => {
+                if (isDragging) {
+                    const deltaX = p.mouseX - prevMouseX;
+                    const deltaY = p.mouseY - prevMouseY;
+                    
+                    targetRotationY += deltaX * 0.01;
+                    targetRotationX += deltaY * 0.01;
+                    
+                    prevMouseX = p.mouseX;
+                    prevMouseY = p.mouseY;
+                }
+            };
+
+            p.mouseWheel = (event) => {
+                targetZoom += event.delta * -0.001;
+                targetZoom = p.constrain(targetZoom, 0.5, 2);
+                p.select('#instructions').style('opacity', '0.7');
+                setTimeout(() => {
+                    p.select('#instructions').style('opacity', '0');
+                }, 2000);
+                return false;
+            };
+
+            p.touchStarted = () => {
+                isDragging = true;
+                prevMouseX = p.mouseX;
+                prevMouseY = p.mouseY;
+                return false;
+            };
+
+            p.touchMoved = (event) => {
+                if (isDragging) {
+                    const deltaX = event.touches[0].clientX - prevMouseX;
+                    const deltaY = event.touches[0].clientY - prevMouseY;
+                    
+                    targetRotationY += deltaX * 0.01;
+                    targetRotationX += deltaY * 0.01;
+                    
+                    prevMouseX = event.touches[0].clientX;
+                    prevMouseY = event.touches[0].clientY;
+                }
+                return false;
+            };
+
+            p.touchEnded = () => {
+                isDragging = false;
+                return false;
+            };
+
+            p.windowResized = () => {
+                calculateCanvasSize();
+                p.resizeCanvas(canvasWidth, canvasHeight);
+                planetRadius = p.min(canvasWidth, canvasHeight) * 0.2;
+                ringWidth = planetRadius * 2.5;
+            };
+        };
+
+        new p5(sketch);
+    </script>
+
+              
+          
+                
+          
+              
